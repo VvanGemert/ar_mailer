@@ -9,7 +9,8 @@ class ActionMailer::Base
   # Set the email class for deliveries. Handle class reloading issues which prevents caching the email class.
   #
   @@email_class_name = 'Email'
-
+  @@priority = 100
+  
   def self.email_class=(klass)
     @@email_class_name = klass.to_s
   end
@@ -27,7 +28,7 @@ class ActionMailer::Base
     mail.ready_to_send
     sender = (mail['return-path'] && mail['return-path'].spec) || mail.from.first
     destinations.each do |destination|
-      self.class.email_class.create :mail => mail.encoded, :to => destination, :from => sender
+      self.class.email_class.create :mail => mail.encoded, :to => destination, :from => sender, :priority => @@priority
     end
   end
 

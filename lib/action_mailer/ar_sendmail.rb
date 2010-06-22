@@ -98,8 +98,8 @@ class ActionMailer::ARSendmail
   # to learn how to enable ActiveRecord::Timestamp.
 
   def self.mailq
-    emails = ActionMailer::Base.email_class.find :all
-
+	emails = ActionMailer::Base.email_class.all(:order => :priority)
+	
     if emails.empty? then
       puts "Mail queue is empty"
       return
@@ -424,7 +424,7 @@ class ActionMailer::ARSendmail
   # last 300 seconds.
 
   def find_emails
-    options = { :conditions => ['last_send_attempt < ?', Time.now.to_i - 300] }
+    options = { :conditions => ['last_send_attempt < ?', Time.now.to_i - 300], :order => :priority }
     options[:limit] = batch_size unless batch_size.nil?
     mail = ActionMailer::Base.email_class.find :all, options
 
