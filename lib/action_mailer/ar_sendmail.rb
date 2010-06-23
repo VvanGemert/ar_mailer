@@ -112,8 +112,7 @@ class ActionMailer::ARSendmail
       size = email.mail.length
       total_size += size
 
-      create_timestamp = email.created_on rescue
-                         email.created_at rescue
+      create_timestamp = email.created_at rescue
                          Time.at(email.created_date) rescue # for Robot Co-op
                          nil
 
@@ -347,7 +346,7 @@ class ActionMailer::ARSendmail
   def cleanup
     return if @max_age == 0
     timeout = Time.now - @max_age
-    conditions = ['last_send_attempt > 0 and created_on < ?', timeout]
+    conditions = ['last_send_attempt > 0 and created_at < ?', timeout]
     mail = ActionMailer::Base.email_class.destroy_all conditions
 
     log "expired #{mail.length} emails from the queue"
