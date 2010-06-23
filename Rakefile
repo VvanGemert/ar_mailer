@@ -8,13 +8,13 @@ $:.unshift(File.expand_path(File.dirname(__FILE__) + '/lib'))
 require './lib/action_mailer/ar_sendmail'
 
 ar_mailer_gemspec = Gem::Specification.new do |s|
-  s.name = %q{adzap-ar_mailer}
+  s.name = %q{VvanGemert-ar_mailer}
   s.version = ActionMailer::ARSendmail::VERSION
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
-  s.authors = ["Eric Hodel", "Adam Meehan"]
+  s.authors = ["Eric Hodel", "Adam Meehan", "Vincent van Gemert"]
   s.default_executable = %q{ar_sendmail}
   s.description = %q{Even delivering email to the local machine may take too long when you have to send hundreds of messages.  ar_mailer allows you to store messages into the database for later delivery by a separate process, ar_sendmail.}
-  s.email = %q{adam.meehan@gmail.com}
+  s.email = %q{vincent@floorplanner.com}
   s.executables = ["ar_sendmail"]
   s.extra_rdoc_files = ["History.txt", "LICENSE.txt", "README.rdoc"]
   s.files = [
@@ -39,7 +39,7 @@ ar_mailer_gemspec = Gem::Specification.new do |s|
     "test/test_helper.rb"
   ]
   s.has_rdoc = true
-  s.homepage = %q{http://github.com/adzap/ar_mailer}
+  s.homepage = %q{http://github.com/VvanGemert/ar_mailer}
   s.rdoc_options = ["--main", "README.rdoc"]
   s.require_paths = ["lib"]
   s.rubyforge_project = %q{seattlerb}
@@ -62,7 +62,7 @@ end
 
 desc "Build packages and install"
 task :install => :package do
-  sh %{sudo gem install --local --test pkg/ar_mailer-#{ActionMailer::ARSendmail::VERSION}}
+  sh %{sudo gem install --local --test pkg/VvanGemert-ar_mailer-#{ActionMailer::ARSendmail::VERSION}}
 end
 
 desc 'Default: run unit tests.'
