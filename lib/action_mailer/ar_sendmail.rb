@@ -409,6 +409,57 @@ class ActionMailer::ARSendmail
     # ignore SMTPServerBusy/EPIPE/ECONNRESET from Net::SMTP.start's ensure
   end
 
+  def deliver_newsletter(newsletter, users)
+  
+      settings = [
+        smtp_settings[:domain],
+        (smtp_settings[:user] || smtp_settings[:user_name]),
+        smtp_settings[:password],
+        smtp_settings[:authentication]
+      ]
+
+      smtp = Net::SMTP.new(smtp_settings[:address], smtp_settings[:port])
+      if smtp.respond_to?(:enable_starttls_auto)
+        smtp.enable_starttls_auto unless smtp_settings[:tls] == false
+      else
+        settings << smtp_settings[:tls]
+      end
+
+      smtp.start(*settings) do |session|
+  	    @failed_auth_count = 0
+      	until users.empty? do
+      	  user = users.shift
+      	  begin
+            res = session.send_message newsletter.mail, newsletter.from, user.email
+            log "sent email %011d from %s to %s: %p" %
+                [newsletter.id, newsletter.from, user.email, res]
+          rescue Net::SMTPFatalError => e
+            log "5xx error sending email %d, removing from queue: %p(%s):\n\t%s" %
+                [email.id, e.message, e.class, e.backtrace.join("\n\t")]
+            session.reset
+          rescue Net::SMTPServerBusy => e
+            log "server too busy, stopping delivery cycle"
+          return
+          rescue Net::SMTPUnknownError, Net::SMTPSyntaxError, TimeoutError, Timeout::Error => e
+            log "error sending email %d: %p(%s):\n\t%s" %
+                [email.id, e.message, e.class, e.backtrace.join("\n\t")]
+            session.reset
+          end
+        end
+  	  end
+  	  rescue Net::SMTPAuthenticationError => e
+        @failed_auth_count += 1
+        if @failed_auth_count >= MAX_AUTH_FAILURES then
+      	  log "authentication error, giving up: #{e.message}"
+      	  raise e
+       else
+          log "authentication error, retrying: #{e.message}"
+        end
+        sleep delay
+  	  rescue Net::SMTPServerBusy, SystemCallError, OpenSSL::SSL::SSLError
+      # ignore SMTPServerBusy/EPIPE/ECONNRESET from Net::SMTP.start's ensure
+  end
+
   ##
   # Prepares ar_sendmail for exiting
 
@@ -430,7 +481,31 @@ class ActionMailer::ARSendmail
     log "found #{mail.length} emails to send"
     mail
   end
+  
+  def find_newsletter
+  
+  	options = { :conditions => ['cancelled IS NULL', 'completed IS NULL'] }
+    options[:limit] = batch_size unless batch_size.nil?
+    newsletter = ActionMailer::Base.newsletter_class.find :first, options
 
+    log "found newsletter with title: #{newsletter.title}" unless newsletter.nil?
+    newsletter
+  
+  end
+   	
+  def find_users(limit, offset)
+  	
+  	options = { :conditions => ['newsletter = 1', 'email IS NOT NULL'], :limit => limit, :offset => offset }
+  	users = ActionMailer::Base.user_class.find :all, options
+  
+  	if !users.nil? && users.length < limit
+      
+  	end
+  	log "found #{users.length} users to send a newsletter"
+    users
+    
+  end 	
+   	
   ##
   # Installs signal handlers to gracefully exit.
 
@@ -457,8 +532,29 @@ class ActionMailer::ARSendmail
     loop do
       begin
         cleanup
+        
         emails = find_emails
         deliver(emails) unless emails.empty?
+        
+        newsletter = find_newsletter
+        
+        unless newsletter.nil? || batch_size.nil?
+          already_send = emails.empty? ? 0 : emails.length
+ 	      offset = newsletter.mails_send.nil? ? 0 : newsletter.mails_send
+ 		  limit = batch_size - already_send
+ 			
+          users = find_users(limit, offset)
+        
+          update = {}
+          update[:mails_send] = offset + users.length unless users.empty?
+        	
+          if (!users.empty? && users.length < limit) || users.empty?
+            update[:completed] = 1
+          end
+          
+          newsletter.update_attributes(update)
+          deliver_newsletter(newsletter, users) unless users.empty?
+        end
       rescue ActiveRecord::Transactions::TransactionError
       end
       break if @once

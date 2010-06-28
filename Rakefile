@@ -45,8 +45,6 @@ ar_mailer_gemspec = Gem::Specification.new do |s|
   s.rubyforge_project = %q{seattlerb}
   s.summary = %q{A two-phase delivery agent for ActionMailer}
   s.test_files = ["test/test_armailer.rb", "test/test_arsendmail.rb"]
-  s.add_development_dependency "minitest", ">= 1.5.0"
-  s.add_development_dependency "mocha", ">= 0.9.8"
 end
 
 Rake::GemPackageTask.new(ar_mailer_gemspec) do |pkg|
@@ -63,14 +61,4 @@ end
 desc "Build packages and install"
 task :install => :package do
   sh %{sudo gem install --local --test pkg/VvanGemert-ar_mailer-#{ActionMailer::ARSendmail::VERSION}}
-end
-
-desc 'Default: run unit tests.'
-task :default => :test
-
-desc 'Test the ar_mailer gem.'
-Rake::TestTask.new(:test) do |t|
-  t.libs << 'lib' << 'test'
-  t.test_files = FileList['test/**/test_*.rb'].exclude("test/test_helper.rb")
-  t.verbose = true
 end

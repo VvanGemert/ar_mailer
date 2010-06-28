@@ -21,19 +21,4 @@ Gem::Specification.new do |s|
   s.summary = %q{A two-phase delivery agent for ActionMailer}
   s.test_files = ["test/test_armailer.rb", "test/test_arsendmail.rb"]
 
-  if s.respond_to? :specification_version then
-    current_version = Gem::Specification::CURRENT_SPECIFICATION_VERSION
-    s.specification_version = 3
-
-    if Gem::Version.new(Gem::RubyGemsVersion) >= Gem::Version.new('1.2.0') then
-      s.add_development_dependency(%q<minitest>, [">= 1.5.0"])
-      s.add_development_dependency(%q<mocha>, [">= 0.9.8"])
-    else
-      s.add_dependency(%q<minitest>, [">= 1.5.0"])
-      s.add_dependency(%q<mocha>, [">= 0.9.8"])
-    end
-  else
-    s.add_dependency(%q<minitest>, [">= 1.5.0"])
-    s.add_dependency(%q<mocha>, [">= 0.9.8"])
-  end
 end

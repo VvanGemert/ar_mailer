@@ -9,6 +9,8 @@ class ActionMailer::Base
   # Set the email class for deliveries. Handle class reloading issues which prevents caching the email class.
   #
   @@email_class_name = 'Email'
+  @@newsletter_class_name = 'EmailNewsletter'
+  @@user_class_name = 'User'
   @@priority = 100
   
   def self.email_class=(klass)
@@ -19,6 +21,22 @@ class ActionMailer::Base
     @@email_class_name.constantize
   end
 
+  def self.newsletter_class=(klass)
+  	@@newsletter_class_name = klass.to_s
+  end
+  
+  def self.newsletter_class
+    @@newsletter_class_name.constantize
+  end
+ 
+  def self.user_class=(klass)
+  	@@user_class_name = klass.to_s
+  end
+  
+  def self.user_class
+    @@user_class_name.constantize
+  end
+   
   ##
   # Adds +mail+ to the Email table.  Only the first From address for +mail+ is
   # used.
