@@ -17,3 +17,4 @@ http://github.com/adzap/ar_mailer/wikis
 == Changes to the Adzap_ar_mailer version
 
 - Added priority
+- Added newsletter support

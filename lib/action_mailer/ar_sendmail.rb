@@ -484,7 +484,7 @@ class ActionMailer::ARSendmail
   
   def find_newsletter
   
-  	options = { :conditions => ['cancelled IS NULL', 'completed IS NULL'] }
+  	options = { :conditions => ['cancelled != 1', 'completed != 1'] }
     options[:limit] = batch_size unless batch_size.nil?
     newsletter = ActionMailer::Base.newsletter_class.find :first, options
 
