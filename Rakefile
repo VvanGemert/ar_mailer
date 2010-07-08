@@ -1,6 +1,5 @@
 require 'rubygems'
 require 'rake/gempackagetask'
-require 'rake/testtask'
 require 'rake/rdoctask'
 
 $:.unshift(File.expand_path(File.dirname(__FILE__) + '/lib'))
@@ -44,7 +43,7 @@ ar_mailer_gemspec = Gem::Specification.new do |s|
   s.require_paths = ["lib"]
   s.rubyforge_project = %q{seattlerb}
   s.summary = %q{A two-phase delivery agent for ActionMailer}
-  s.test_files = ["test/test_armailer.rb", "test/test_arsendmail.rb"]
+  s.test_files = []
 end
 
 Rake::GemPackageTask.new(ar_mailer_gemspec) do |pkg|

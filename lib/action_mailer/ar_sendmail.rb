@@ -1,5 +1,6 @@
 require 'optparse'
 require 'net/smtp'
+require 'net/imap'
 require 'smtp_tls' unless Net::SMTP.instance_methods.include?("enable_starttls_auto")
 
 ##
@@ -146,6 +147,11 @@ class ActionMailer::ARSendmail
     options[:MaxAge] = 86400 * 7
     options[:Once] = false
     options[:RailsEnv] = ENV['RAILS_ENV']
+    options[:Imap] = ''
+    options[:Port] = 993
+    options[:Login] = ''
+    options[:Password] = ''
+    options[:DryRun] = false
     options[:Pidfile] = options[:Chdir] + '/log/ar_sendmail.pid'
 
     opts = OptionParser.new do |opts|
@@ -229,7 +235,37 @@ class ActionMailer::ARSendmail
               "Default: #{options[:Verbose]}") do |verbose|
         options[:Verbose] = verbose
       end
-
+			
+			opts.on("-i", "--imap",
+              "Imap server used to check for bounces",
+              "Default: none") do |name|
+        options[:Imap] = name
+      end
+      
+      opts.on("-l", "--login",
+              "login name to check for bounces",
+              "Default: none") do |name|
+        options[:Login] = name
+      end
+      
+      opts.on( "--password",
+              "password name to check for bounces",
+              "Default: none") do |name|
+        options[:Password] = name
+      end
+      
+      opts.on( "--port",
+              "port to check for bounces",
+              "Default: #{options[:Port]}") do |name|
+        options[:Port] = name
+      end
+      
+      opts.on("-f", "--dry-run",
+							"Dry run: don't send any emails",
+              "Default: Deliver all available emails\n", options[:DryRun]) do |dry_run|
+        options[:DryRun] = dry_run
+      end
+      
       opts.on("-h", "--help",
               "You're looking at it") do
         usage opts
@@ -335,7 +371,8 @@ class ActionMailer::ARSendmail
     @once = options[:Once]
     @verbose = options[:Verbose]
     @max_age = options[:MaxAge]
-
+		@dry_run = options[:DryRun]
+		
     @failed_auth_count = 0
   end
 
@@ -375,8 +412,12 @@ class ActionMailer::ARSendmail
       until emails.empty? do
         email = emails.shift
         begin
-          res = session.send_message email.mail, email.from, email.to
-          email.destroy
+        	if @dry_run
+              res = 'DRY RUN'
+          else
+          	res = session.send_message email.mail, email.from, email
+          	email.destroy
+          end
           log "sent email %011d from %s to %s: %p" %
                 [email.id, email.from, email.to, res]
         rescue Net::SMTPFatalError => e
@@ -389,7 +430,7 @@ class ActionMailer::ARSendmail
           return
         rescue Net::SMTPUnknownError, Net::SMTPSyntaxError, TimeoutError, Timeout::Error => e
           email.last_send_attempt = Time.now.to_i
-          email.save rescue nil
+          email.save rescue nil unless @dry_run
           log "error sending email %d: %p(%s):\n\t%s" %
                 [email.id, e.message, e.class, e.backtrace.join("\n\t")]
           session.reset
@@ -430,7 +471,11 @@ class ActionMailer::ARSendmail
       	until users.empty? do
       	  user = users.shift
       	  begin
+      	  	if @dry_run
+              res = 'DRY RUN'
+           else
             res = session.send_message newsletter.mail, newsletter.from, user.email
+           end
             log "sent email %011d from %s to %s: %p" %
                 [newsletter.id, newsletter.from, user.email, res]
           rescue Net::SMTPFatalError => e
@@ -484,18 +529,18 @@ class ActionMailer::ARSendmail
   
   def find_newsletter
   
-  	options = { :conditions => ['cancelled != 1', 'completed != 1'] }
-    options[:limit] = batch_size unless batch_size.nil?
+  	options = { :conditions => ['cancelled != 1 AND completed != 1'] }
     newsletter = ActionMailer::Base.newsletter_class.find :first, options
 
     log "found newsletter with title: #{newsletter.title}" unless newsletter.nil?
+    log "no newsletters found" unless !newsletter.nil?
     newsletter
   
   end
    	
   def find_users(limit, offset)
   	
-  	options = { :conditions => ['newsletter = 1', 'email IS NOT NULL'], :limit => limit, :offset => offset }
+  	options = { :conditions => ['newsletter = 1 AND email IS NOT NULL'], :limit => limit, :offset => offset, :order => "id" }
   	users = ActionMailer::Base.user_class.find :all, options
   
   	if !users.nil? && users.length < limit
@@ -534,15 +579,15 @@ class ActionMailer::ARSendmail
         cleanup
         
         emails = find_emails
+        already_send = emails.empty? ? 0 : emails.length
         deliver(emails) unless emails.empty?
         
         newsletter = find_newsletter
         
         unless newsletter.nil? || batch_size.nil?
-          already_send = emails.empty? ? 0 : emails.length
- 	      offset = newsletter.mails_send.nil? ? 0 : newsletter.mails_send
- 		  limit = batch_size - already_send
- 			
+ 	      	offset = newsletter.mails_send.nil? ? 0 : newsletter.mails_send
+ 		  		limit = batch_size - already_send
+ 					 
           users = find_users(limit, offset)
         
           update = {}
@@ -552,7 +597,7 @@ class ActionMailer::ARSendmail
             update[:completed] = 1
           end
           
-          newsletter.update_attributes(update)
+          newsletter.update_attributes(update) unless @dry_run
           deliver_newsletter(newsletter, users) unless users.empty?
         end
       rescue ActiveRecord::Transactions::TransactionError
