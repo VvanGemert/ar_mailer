@@ -372,7 +372,7 @@ class ActionMailer::ARSendmail
     @verbose = options[:Verbose]
     @max_age = options[:MaxAge]
 		@dry_run = options[:DryRun]
-		
+		@imap = { :host => options[:Imap], :port => options[:Port], :user => options[:Login], :password => options[:Password] }
     @failed_auth_count = 0
   end
 
@@ -415,7 +415,7 @@ class ActionMailer::ARSendmail
         	if @dry_run
               res = 'DRY RUN'
           else
-          	res = session.send_message email.mail, email.from, email
+          	res = session.send_message email.mail, email.from, email.to
           	email.destroy
           end
           log "sent email %011d from %s to %s: %p" %
@@ -597,8 +597,12 @@ class ActionMailer::ARSendmail
             update[:completed] = 1
           end
           
+          # Deliver newsletter
           newsletter.update_attributes(update) unless @dry_run
           deliver_newsletter(newsletter, users) unless users.empty?
+          
+          # Check for bounces
+          check_bounces unless @dry_run
         end
       rescue ActiveRecord::Transactions::TransactionError
       end
@@ -619,4 +623,91 @@ class ActionMailer::ARSendmail
     ActionMailer::Base.smtp_settings rescue ActionMailer::Base.server_settings
   end
 
+	def check_bounces
+
+    begin
+      imap = Net::IMAP.new(@imap.host, @imap.port, true)
+      imap.login(@imap.user, @imap.password)
+      imap.select('INBOX')
+    
+      imap.uid_search(["NOT", "DELETED"]).each do |message_id|
+        msg = imap.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
+        email = TMail::Mail.parse(msg)
+        receive(email)
+        #Mark message as deleted and it will be removed from storage when user session closed
+        imap.uid_store(message_id, "+FLAGS", [:Deleted])
+      end
+      # tell server to permanently remove all messages flagged as :Deleted
+      imap.expunge
+      imap.logout
+      imap.disconnect
+    rescue Net::IMAP::NoResponseError => e
+      puts e
+    rescue Net::IMAP::ByeResponseError => e
+      puts e
+    rescue => e
+      puts e
+    end
+
+    render :inline => "test"
+  end
+
+  def receive(email)
+     bounce = BouncedDelivery.from_email(email)
+     if(bounce.status_info > 3)
+        log "User bounced with email: #{bounce.sender}"
+        user = ActionMailer::Base.user_class.find_by_email(bounce.sender)
+  
+  			if !user.nil?
+      		user.update_attribute(:bounced_at, Time.now)
+  			end
+     end
+  end
+
+end
+
+##
+# Checking for bounced delivery
+# 
+
+class BouncedDelivery
+
+  attr_accessor :status_info, :sender, :subject
+
+  def self.from_email(email)
+    returning(bounce = self.new) do
+      
+      if(email.subject.match(/Mail delivery failed/i))
+        bounce.status_info = 6
+      elsif(email.subject.match(/Delivery Status Notification/i))
+        bounce.status_info = 8
+      elsif(email.header.to_s.match(/X-Failed-Recipient/i))
+        bounce.status_info = 10
+      else
+        bounce.status_info = 2
+      end
+      
+      if bounce.status_info > 3
+        bounce.subject = email.subject
+        bounce.sender = bounce.check_recipient(email.header)
+      end
+    end
+  end
+
+  def check_recipient(header)
+      header['x-failed-recipients'].body.to_s unless header['x-failed-recipients'].nil?
+  end
+
+  def status
+    case status_info
+    when 10
+      'Failed - X-Failed-Recipient'
+    when 8
+      'Failed - Delivery Status Notification'
+    when 6
+      'Failed - Mail delivery failed'
+    when 2
+      'Success'
+    end
+  end
 end
