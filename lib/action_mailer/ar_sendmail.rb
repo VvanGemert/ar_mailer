@@ -147,9 +147,9 @@ class ActionMailer::ARSendmail
     options[:MaxAge] = 86400 * 7
     options[:Once] = false
     options[:RailsEnv] = ENV['RAILS_ENV']
-    options[:Imap] = ''
     options[:Port] = 993
     options[:Login] = ''
+    options[:Imap] = ''
     options[:Password] = ''
     options[:DryRun] = false
     options[:Pidfile] = options[:Chdir] + '/log/ar_sendmail.pid'
@@ -236,28 +236,34 @@ class ActionMailer::ARSendmail
         options[:Verbose] = verbose
       end
 			
-			opts.on("-i", "--imap",
+			opts.on("-i", "--imap IMAP",
               "Imap server used to check for bounces",
-              "Default: none") do |name|
-        options[:Imap] = name
+              "Default: false", String) do |imap|
+        options[:Imap] = imap
       end
       
-      opts.on("-l", "--login",
+      opts.on("-l", "--login LOGIN",
               "login name to check for bounces",
-              "Default: none") do |name|
-        options[:Login] = name
+              "Default: false", String) do |login|
+        options[:Login] = login
       end
       
-      opts.on( "--password",
+      opts.on( "--password PASSWORD",
               "password name to check for bounces",
-              "Default: none") do |name|
-        options[:Password] = name
+              "Default: false", String) do |password|
+        options[:Password] = password
       end
       
-      opts.on( "--port",
+      opts.on( "--port PORT",
               "port to check for bounces",
-              "Default: #{options[:Port]}") do |name|
-        options[:Port] = name
+              "Default: #{options[:Port]}", Integer) do |port|
+        options[:Port] = port
+      end
+      
+      opts.on( "-k", "--bouncecheck",
+              "check for bounces",
+              "Default: false") do |bounce_check|
+        options[:Bouncecheck] = true
       end
       
       opts.on("-f", "--dry-run",
@@ -373,6 +379,7 @@ class ActionMailer::ARSendmail
     @max_age = options[:MaxAge]
 		@dry_run = options[:DryRun]
 		@imap = { :host => options[:Imap], :port => options[:Port], :user => options[:Login], :password => options[:Password] }
+		@bouncecheck = options[:Bouncecheck]
     @failed_auth_count = 0
   end
 
@@ -601,9 +608,11 @@ class ActionMailer::ARSendmail
           newsletter.update_attributes(update) unless @dry_run
           deliver_newsletter(newsletter, users) unless users.empty?
           
-          # Check for bounces
-          check_bounces unless @dry_run
         end
+        
+        # Check for bounces
+        check_bounces unless @dry_run
+        
       rescue ActiveRecord::Transactions::TransactionError
       end
       break if @once
@@ -625,31 +634,32 @@ class ActionMailer::ARSendmail
 
 	def check_bounces
 
-    begin
-      imap = Net::IMAP.new(@imap.host, @imap.port, true)
-      imap.login(@imap.user, @imap.password)
-      imap.select('INBOX')
-    
-      imap.uid_search(["NOT", "DELETED"]).each do |message_id|
-        msg = imap.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
-        email = TMail::Mail.parse(msg)
-        receive(email)
-        #Mark message as deleted and it will be removed from storage when user session closed
-        imap.uid_store(message_id, "+FLAGS", [:Deleted])
-      end
-      # tell server to permanently remove all messages flagged as :Deleted
-      imap.expunge
-      imap.logout
-      imap.disconnect
-    rescue Net::IMAP::NoResponseError => e
-      puts e
-    rescue Net::IMAP::ByeResponseError => e
-      puts e
-    rescue => e
-      puts e
-    end
-
-    render :inline => "test"
+		if @bouncecheck
+	    begin
+	      imap = Net::IMAP.new(@imap[:host], @imap[:port], true)
+	      imap.login(@imap[:user], @imap[:password])
+	      imap.select('INBOX')
+	    
+	      imap.uid_search(["NOT", "DELETED"]).each do |message_id|
+	        msg = imap.uid_fetch(message_id,'RFC822')[0].attr['RFC822']
+	        email = TMail::Mail.parse(msg)
+	        receive(email)
+	        #Mark message as deleted and it will be removed from storage when user session closed
+	        imap.uid_store(message_id, "+FLAGS", [:Deleted])
+	      end
+	      # tell server to permanently remove all messages flagged as :Deleted
+	      imap.expunge
+	      imap.logout
+	      imap.disconnect
+	    rescue Net::IMAP::NoResponseError => e
+	      log e
+	    rescue Net::IMAP::ByeResponseError => e
+	      log e
+	    rescue => e
+	      log e
+	    end
+		end
+		
   end
 
   def receive(email)
