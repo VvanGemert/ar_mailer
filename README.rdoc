@@ -16,5 +16,9 @@ http://github.com/adzap/ar_mailer/wikis
 
 == Changes to the Adzap_ar_mailer version
 
-- Added priority
-- Added newsletter support
+- Added priority, the higher the priority the faster it will send
+- Added newsletter support, loops through user table and is connected with the batch size
+- Added bounce check support, updates user with bounced_at field when bounced
+- Added dry run support, dry run doesn't send emails and doesn't check for bounced
+
+Use "ar_sendmail -h" for all the options
